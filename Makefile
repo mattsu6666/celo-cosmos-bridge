@@ -5,14 +5,14 @@ clean-simd:
 	rm -rf data 2>/dev/null
 
 build-simd: | clean-simd
-	git clone https://github.com/ChorusOne/ibc-go
-	cd ibc-go && git checkout 7ae0507a974c8b7532d4ccf9ee697e8926cb608e
-
-	cd ibc-go && make build-linux
+	git clone https://github.com/mattsu6666/ibc-go
+#	cd ibc-go && git checkout 01ef21e2 #giulio/ics_28_wasm_client_rebase
+	cd ibc-go && git checkout f576ee5e #mattsu6666/ics_28_wasm_client
+	cd ibc-go && make build
 
 start-simd: | clean-config-simd config-simd
-	cd ibc-go && make build
-	ibc-go/build/simd start --home "data/.gaiad"  --rpc.laddr tcp://0.0.0.0:26657 --trace
+	cd /Users/mattsu/ghq/github.com/cosmos/ibc-go && make build
+	/Users/mattsu/ghq/github.com/cosmos/ibc-go/build/simd start --home "data/.gaiad"  --rpc.laddr tcp://0.0.0.0:26657 --trace
 
 clean-config-simd:
 	rm -rf data 2>/dev/null
@@ -39,16 +39,25 @@ clean-clc:
 	rm -rf celo-light-client 2>/dev/null
 
 build-clc: | clean-clc
-	git clone https://github.com/ChorusOne/celo-light-client.git
-	cd celo-light-client && git checkout tags/v0.2.0
-	cd celo-light-client && make wasm-optimized
+#	git clone https://github.com/ChorusOne/celo-light-client.git
+#	cd celo-light-client && git checkout tags/v0.2.0
+#	cd celo-light-client && make wasm-optimized
+#	NOTE: Use for improvs
+	git clone https://github.com/datachainlab/celo-light-client.git
+	cd celo-light-client && git checkout giulio/improvs
+#	cd celo-light-client && git checkout improvs-rebased
+	cd celo-light-client/light_client && make wasm-optimized
 
 start-clc:
-	cd celo-light-client && make wasm-optimized
+#	cd celo-light-client && make wasm-optimized
+#	NOTE: Use for improvs
+	cd celo-light-client/light_client && make wasm-optimized
 
 	# upload light client binary to gaia via wasm-manager
 	rm -f /tmp/clc.log 2>/dev/null
-	ibc-go/build/simd tx ibc wasm-manager push-wasm celo-light-client/target/wasm32-unknown-unknown/release/celo_light_client.wasm --gas=80000000 --home "data/.gaiad" --node http://localhost:26657 --chain-id wormhole --from=relayer --keyring-backend test --yes | tee /tmp/clc.log
+#	ibc-go/build/simd tx ibc wasm-manager push-wasm celo-light-client/target/wasm32-unknown-unknown/release/celo_light_client.wasm --gas=80000000 --home "data/.gaiad" --node http://localhost:26657 --chain-id wormhole --from=relayer --keyring-backend test --yes | tee /tmp/clc.log
+#	NOTE: Use for improvs
+	ibc-go/build/simd tx ibc wasm-manager push-wasm celo-light-client/target/wasm32-unknown-unknown/release/celo_lightclient.wasm --gas=80000000 --home "data/.gaiad" --node http://localhost:26657 --chain-id wormhole --from=relayer --keyring-backend test --yes | tee /tmp/clc.log
 
 clean-geth:
 	rm -rf celo-blockchain 2>/dev/null
@@ -71,7 +80,7 @@ build-geth: | clean-geth
 	mv celo-blockchain-1.3.2 celo-blockchain
 
 	# uncomment this for higher gas limit
-	# cd celo-blockchain && sed -i 's/DefaultGasLimit uint64 =.*/DefaultGasLimit uint64 = 80000000/g' params/protocol_params.go
+	# cd celo-blockchain && gsed -i 's/DefaultGasLimit uint64 =.*/DefaultGasLimit uint64 = 80000000/g' params/protocol_params.go
 	cd celo-blockchain &&  go run build/ci.go install ./cmd/geth
 
 start-geth: | clean-config-geth config-geth
@@ -84,22 +93,27 @@ clean-qt:
 	rm -rf quantum-tunnel 2>/dev/null
 
 build-qt: | clean-qt
-	git clone https://github.com/ChorusOne/quantum-tunnel
-	cd quantum-tunnel && git checkout v0.2.0-celo
+	# NOTE: Use for improvs
+	git clone https://github.com/mattsu6666/quantum-tunnel
+	cd quantum-tunnel && git checkout mattsu6666/celo_improvs
+#	git clone https://github.com/ChorusOne/quantum-tunnel
+#	cd quantum-tunnel && git checkout v0.2.0-celo
 
 	# point quantum tunnel to local celo-light-client crate
-	cd quantum-tunnel && sed -i "/celo-light-client.git/c\celo_light_client = { path = \"../celo-light-client\", features = [\"wasm-contract\"], optional = true , default-features = false}" Cargo.toml
+	# NOTE: Use for improvs
+	cd quantum-tunnel && gsed -i "/celo-light-client.git/c\celo-types = { path = \"../celo-light-client/types\", features = [\"serialize\"], optional = true}" Cargo.toml
+#	cd quantum-tunnel && gsed -i "/celo-light-client.git/c\celo_light_client = { path = \"../celo-light-client\", features = [\"wasm-contract\"], optional = true , default-features = false}" Cargo.toml
 
 	cd quantum-tunnel && CHAIN=celo RUSTFLAGS=-Awarnings make build
 
 start-qt:
 	# fetch ID of the wasm light client binary (uploaded via `start-lc` command) and update quantum-tunnel config
-	cat /tmp/clc.log | grep -oP "txhash: \K.*" > /tmp/clc.tx
-	ibc-go/build/simd query tx $$(cat /tmp/clc.tx) | grep -oP "wasm_code_id.*value\"\:\"\K.*(?=\")" | xargs -I{} sed -i 's/"wasm_id": ".*"/"wasm_id": "{}"/g' quantum-tunnel/test_data/$(TEST_MODE).json
+	cat /tmp/clc.log | ggrep -oP "txhash: \K.*" > /tmp/clc.tx
+	ibc-go/build/simd query tx $$(cat /tmp/clc.tx) | ggrep -oP "wasm_code_id.*value\"\:\"\K.*(?=\")" | xargs -I{} gsed -i 's/"wasm_id": ".*"/"wasm_id": "{}"/g' quantum-tunnel/test_data/$(TEST_MODE).json
 
 	# update contract addresses
-	cat tendermint-sol/build/contracts/IBCHost.json | jq '.networks."1337".address' -r | xargs -I{} sed -i 's/"ibc_host_address": ".*"/"ibc_host_address": "{}"/g' quantum-tunnel/test_data/$(TEST_MODE).json
-	cat tendermint-sol/build/contracts/IBCHandler.json | jq '.networks."1337".address' -r | xargs -I{} sed -i 's/"ibc_handler_address": ".*"/"ibc_handler_address": "{}"/g' quantum-tunnel/test_data/$(TEST_MODE).json
+	cat tendermint-sol/build/contracts/IBCHost.json | jq '.networks."1337".address' -r | xargs -I{} gsed -i 's/"ibc_host_address": ".*"/"ibc_host_address": "{}"/g' quantum-tunnel/test_data/$(TEST_MODE).json
+	cat tendermint-sol/build/contracts/IBCHandler.json | jq '.networks."1337".address' -r | xargs -I{} gsed -i 's/"ibc_handler_address": ".*"/"ibc_handler_address": "{}"/g' quantum-tunnel/test_data/$(TEST_MODE).json
 
 	cd quantum-tunnel && COSMOS_SIGNER_SEED=$$(cat ../data/.gaiad/relayer_mnemonic) CELO_SIGNER_SEED="flat reflect table identify forward west boat furnace similar million list wood" RUST_LOG=info RUSTFLAGS=-Awarnings cargo run --features celo -- -c test_data/$(TEST_MODE).json start
 
